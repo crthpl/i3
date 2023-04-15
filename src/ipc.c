@@ -426,7 +426,7 @@ void dump_node(yajl_gen gen, struct Con *con, bool inplace_restart) {
     y(array_close);
 
     ystr("focused");
-    y(bool, (con == focused));
+    y(bool, (con_is_focused(con)));
 
     if (con->type != CT_ROOT && con->type != CT_OUTPUT) {
         ystr("output");
@@ -920,8 +920,6 @@ IPC_HANDLER(get_workspaces) {
     yajl_gen gen = ygenalloc();
     y(array_open);
 
-    Con *focused_ws = con_get_workspace(focused);
-
     Con *output;
     TAILQ_FOREACH (output, &(croot->nodes_head), nodes) {
         if (con_is_internal(output))
@@ -943,8 +941,9 @@ IPC_HANDLER(get_workspaces) {
             ystr("visible");
             y(bool, workspace_is_visible(ws));
 
+            // todo: descend into children/iterate over all devices
             ystr("focused");
-            y(bool, ws == focused_ws);
+            y(bool, con_is_focused(ws));
 
             ystr("rect");
             y(map_open);

@@ -103,6 +103,7 @@ struct ws_assignments_head ws_assignments = TAILQ_HEAD_INITIALIZER(ws_assignment
 /* We hope that those are supported and set them to true */
 bool xkb_supported = true;
 bool shape_supported = true;
+bool xi2_supported = true;
 
 bool force_xinerama = false;
 
@@ -597,6 +598,7 @@ int main(int argc, char *argv[]) {
     } else {
         xcb_prefetch_extension_data(conn, &xcb_randr_id);
     }
+    xcb_prefetch_extension_data(conn, &xcb_input_id);
 
     /* Prepare for us to get a current timestamp as recommended by ICCCM */
     xcb_change_window_attributes(conn, root, XCB_CW_EVENT_MASK, (uint32_t[]){XCB_EVENT_MASK_PROPERTY_CHANGE});
@@ -891,6 +893,21 @@ int main(int argc, char *argv[]) {
     }
     if (!shape_supported) {
         DLOG("shape 1.1 is not present on this server\n");
+    }
+
+    // check for at least xinput 2.0
+    extreply = xcb_get_extension_data(conn, &xcb_input_id);
+    if (extreply->present) {
+        xi2_base = extreply->first_event;
+        xcb_input_xi_query_version_cookie_t cookie = xcb_input_xi_query_version(conn, 2, 0);
+        xcb_input_xi_query_version_reply_t *version = xcb_input_xi_query_version_reply(conn, cookie, NULL);
+        xi2_supported = version && version->major_version == 2;
+        free(version);
+    } else {
+        input_supported = false;
+    }
+    if (!input_supported) {
+        DLOG("xinput 2.0 is not present on this server\n");
     }
 
     restore_connect();

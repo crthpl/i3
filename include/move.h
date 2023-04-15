@@ -15,7 +15,7 @@
  * Moves the given container in the given direction
  *
  */
-void tree_move(Con *con, direction_t direction);
+void tree_move(Device *device, Con *con, direction_t direction);
 
 /**
  * This function detaches 'con' from its parent and inserts it either before or

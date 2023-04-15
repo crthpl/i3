@@ -243,7 +243,7 @@ void con_detach(Con *con) {
  * run of x_push_changes().
  *
  */
-void con_focus(Con *con) {
+void con_focus(Device *device, Con *con) {
     assert(con != NULL);
     DLOG("con_focus = %p\n", con);
 
@@ -252,9 +252,9 @@ void con_focus(Con *con) {
     TAILQ_REMOVE(&(con->parent->focus_head), con, focused);
     TAILQ_INSERT_HEAD(&(con->parent->focus_head), con, focused);
     if (con->parent->parent != NULL)
-        con_focus(con->parent);
+        con_focus(device, con->parent);
 
-    focused = con;
+    device_set_focus(device, con);
     /* We can't blindly reset non-leaf containers since they might have
      * other urgent children. Therefore we only reset leafs and propagate
      * the changes upwards via con_update_parents_urgency() which does proper
@@ -284,8 +284,8 @@ static void con_raise(Con *con) {
  * Sets input focus to the given container and raises it to the top.
  *
  */
-void con_activate(Con *con) {
-    con_focus(con);
+void con_activate(Device *device, Con *con) {
+    con_focus(device, con);
     con_raise(con);
 }
 
@@ -294,16 +294,16 @@ void con_activate(Con *con) {
  * restrictions and properly warps the pointer if needed.
  *
  */
-void con_activate_unblock(Con *con) {
+void con_activate_unblock(Device *device, Con *con) {
     Con *ws = con_get_workspace(con);
-    Con *previous_focus = focused;
+    Con *previous_focus = con_by_device(device);
     Con *fullscreen_on_ws = con_get_fullscreen_covering_ws(ws);
 
     if (fullscreen_on_ws && fullscreen_on_ws != con && !con_has_parent(con, fullscreen_on_ws)) {
         con_disable_fullscreen(fullscreen_on_ws);
     }
 
-    con_activate(con);
+    con_activate(device, con);
 
     /* If the container is not on the current workspace, workspace_show() will
      * switch to a different workspace and (if enabled) trigger a mouse pointer
@@ -317,10 +317,10 @@ void con_activate_unblock(Con *con) {
      * So we focus 'con' to make it the currently focused window of the target
      * workspace, then revert focus. */
     if (ws != con_get_workspace(previous_focus)) {
-        con_activate(previous_focus);
+        con_activate(device, previous_focus);
         /* Now switch to the workspace, then focus */
         workspace_show(ws);
-        con_activate(con);
+        con_activate(device, con);
     }
 }
 
@@ -639,7 +639,7 @@ Con *con_inside_floating(Con *con) {
  *
  */
 bool con_inside_focused(Con *con) {
-    if (con == focused)
+    if (con_is_focused(con))
         return true;
     if (!con->parent)
         return false;
@@ -887,13 +887,13 @@ void con_unmark(Con *con, const char *name) {
  * TODO: priority
  *
  */
-Con *con_for_window(Con *con, i3Window *window, Match **store_match) {
+Con *con_for_window(Device *device, Con *con, i3Window *window, Match **store_match) {
     Con *child;
     Match *match;
 
     TAILQ_FOREACH (child, &(con->nodes_head), nodes) {
         TAILQ_FOREACH (match, &(child->swallow_head), matches) {
-            if (!match_matches_window(match, window))
+            if (!match_matches_window(device, match, window))
                 continue;
             if (store_match != NULL)
                 *store_match = match;
@@ -906,7 +906,7 @@ Con *con_for_window(Con *con, i3Window *window, Match **store_match) {
 
     TAILQ_FOREACH (child, &(con->floating_head), floating_windows) {
         TAILQ_FOREACH (match, &(child->swallow_head), matches) {
-            if (!match_matches_window(match, window))
+            if (!match_matches_window(device, match, window))
                 continue;
             if (store_match != NULL)
                 *store_match = match;
@@ -1146,7 +1146,7 @@ static void con_set_fullscreen_mode(Con *con, fullscreen_mode_t fullscreen_mode)
  * one.
  *
  */
-void con_enable_fullscreen(Con *con, fullscreen_mode_t fullscreen_mode) {
+void con_enable_fullscreen(Device *device, Con *con, fullscreen_mode_t fullscreen_mode) {
     if (con->type == CT_WORKSPACE) {
         DLOG("You cannot make a workspace fullscreen.\n");
         return;
@@ -1176,8 +1176,8 @@ void con_enable_fullscreen(Con *con, fullscreen_mode_t fullscreen_mode) {
     /* Set focus to new fullscreen container. Unless in global fullscreen mode
      * and on another workspace restore focus afterwards.
      * Switch to the container’s workspace if mode is global. */
-    Con *cur_ws = con_get_workspace(focused);
-    Con *old_focused = focused;
+    Con *old_focused = con_by_device(device);
+    Con *cur_ws = con_get_workspace(old_focused);
     if (fullscreen_mode == CF_GLOBAL && cur_ws != con_ws)
         workspace_show(con_ws);
     con_activate(con);
@@ -1208,7 +1208,7 @@ void con_disable_fullscreen(Con *con) {
     con_set_fullscreen_mode(con, CF_NONE);
 }
 
-static bool _con_move_to_con(Con *con, Con *target, bool behind_focused, bool fix_coordinates, bool dont_warp, bool ignore_focus, bool fix_percentage) {
+static bool _con_move_to_con(Device *device, Con *con, Con *target, bool behind_focused, bool fix_coordinates, bool dont_warp, bool ignore_focus, bool fix_percentage) {
     Con *orig_target = target;
 
     /* Prevent moving if this would violate the fullscreen focus restrictions. */
@@ -1249,7 +1249,7 @@ static bool _con_move_to_con(Con *con, Con *target, bool behind_focused, bool fi
 
     /* Save the current workspace. So we can call workspace_show() by the end
      * of this function. */
-    Con *current_ws = con_get_workspace(focused);
+    Con *current_ws = con_get_workspace(con_by_device(device));
 
     Con *source_output = con_get_output(con),
         *dest_output = con_get_output(target_ws);
@@ -1334,13 +1334,13 @@ static bool _con_move_to_con(Con *con, Con *target, bool behind_focused, bool fi
          * new workspace is hidden and it's necessary to immediately switch
          * back to the originally-focused workspace. */
         Con *old_focus_ws = TAILQ_FIRST(&(output_get_content(dest_output)->focus_head));
-        Con *old_focus = focused;
+        Con *old_focus = con_by_device(device);
         con_activate(con_descend_focused(con));
 
         if (old_focus_ws == current_ws && old_focus->type != CT_WORKSPACE) {
             /* Restore focus to the currently focused container. */
             con_activate(old_focus);
-        } else if (con_get_workspace(focused) != old_focus_ws) {
+        } else if (con_get_workspace(con_by_device(device)) != old_focus_ws) {
             /* Restore focus if the output's focused workspace has changed. */
             con_focus(con_descend_focused(old_focus_ws));
         }
@@ -2422,7 +2422,7 @@ i3String *con_parse_title_format(Con *con) {
  * Swaps the two containers.
  *
  */
-bool con_swap(Con *first, Con *second) {
+bool con_swap(Device *device, Con *first, Con *second) {
     assert(first != NULL);
     assert(second != NULL);
     DLOG("Swapping containers %p / %p\n", first, second);
@@ -2515,12 +2515,12 @@ bool con_swap(Con *first, Con *second) {
     if (first->fullscreen_mode == CF_NONE) {
         con_disable_fullscreen(second);
     } else {
-        con_enable_fullscreen(second, first->fullscreen_mode);
+        con_enable_fullscreen(device, second, first->fullscreen_mode);
     }
     if (second_fullscreen_mode == CF_NONE) {
         con_disable_fullscreen(first);
     } else {
-        con_enable_fullscreen(first, second_fullscreen_mode);
+        con_enable_fullscreen(device, first, second_fullscreen_mode);
     }
 
     /* We don't actually need this since percentages-wise we haven't changed

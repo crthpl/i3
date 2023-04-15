@@ -203,7 +203,7 @@ static void attach_to_workspace(Con *con, Con *ws, direction_t direction) {
  * such an output exists.
  *
  */
-static void move_to_output_directed(Con *con, direction_t direction) {
+static void move_to_output_directed(Device *device, Con *con, direction_t direction) {
     Output *current_output = get_output_for_con(con);
     Output *output = get_output_next(direction, current_output, CLOSEST_OUTPUT);
 
@@ -221,7 +221,7 @@ static void move_to_output_directed(Con *con, direction_t direction) {
     }
 
     Con *old_ws = con_get_workspace(con);
-    const bool moves_focus = (focused == con);
+    const bool moves_focus = (con_by_device(device) == con);
     attach_to_workspace(con, ws, direction);
     if (moves_focus) {
         /* workspace_show will not correctly update the active workspace because
@@ -239,8 +239,8 @@ static void move_to_output_directed(Con *con, direction_t direction) {
          * focusing. This also ensures that the mouse warps correctly.
          * See: #3518. */
         con_focus(con);
-        focused = old_ws;
-        workspace_show(ws);
+        device_set_focus(device, old_ws);
+        workspace_show(device, ws);
     }
 
     /* force re-painting the indicators */
@@ -255,7 +255,7 @@ static void move_to_output_directed(Con *con, direction_t direction) {
  * Moves the given container in the given direction
  *
  */
-void tree_move(Con *con, direction_t direction) {
+void tree_move(Device *device, Con *con, direction_t direction) {
     position_t position;
     Con *target;
 
@@ -276,7 +276,7 @@ void tree_move(Con *con, direction_t direction) {
     if ((con->fullscreen_mode == CF_OUTPUT) ||
         (con->parent->type == CT_WORKSPACE && con_num_children(con->parent) == 1)) {
         /* This is the only con on this workspace */
-        move_to_output_directed(con, direction);
+        move_to_output_directed(device, con, direction);
         return;
     }
 
@@ -340,7 +340,7 @@ void tree_move(Con *con, direction_t direction) {
             if (con->parent == con_get_workspace(con)) {
                 /* If we couldn't find a place to move it on this workspace, try
                  * to move it to a workspace on a different output */
-                move_to_output_directed(con, direction);
+                move_to_output_directed(device, con, direction);
                 return;
             }
 
@@ -384,7 +384,7 @@ void tree_move(Con *con, direction_t direction) {
          * of the workspace. Treat it as though the workspace is its parent
          * and move it to the next output. */
         DLOG("Grandparent is workspace\n");
-        move_to_output_directed(con, direction);
+        move_to_output_directed(device, con, direction);
         return;
     } else {
         DLOG("Moving into container above\n");

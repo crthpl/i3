@@ -71,7 +71,7 @@ bool output_triggers_assignment(Output *output, struct Workspace_Assignment *ass
  * memory and initializing the data structures correctly).
  *
  */
-Con *workspace_get(const char *num);
+Con *workspace_get(Device *device, const char *num);
 
 /**
  * Extracts workspace names from keybindings (e.g. “web” from “bindsym $mod+1
@@ -102,7 +102,7 @@ bool workspace_is_visible(Con *ws);
  * Switches to the given workspace
  *
  */
-void workspace_show(Con *ws);
+void workspace_show(Device *device, Con *ws);
 
 /**
  * Looks up the workspace by name and switches to it.

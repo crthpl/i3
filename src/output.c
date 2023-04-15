@@ -30,9 +30,9 @@ Con *output_get_content(Con *output) {
  * output name.
  *
  */
-Output *get_output_from_string(Output *current_output, const char *output_str) {
+Output *get_output_from_string(Device *device, Output *current_output, const char *output_str) {
     if (strcasecmp(output_str, "current") == 0) {
-        return get_output_for_con(focused);
+        return get_output_for_con(con_by_device(device));
     } else if (strcasecmp(output_str, "left") == 0) {
         return get_output_next_wrap(D_LEFT, current_output);
     } else if (strcasecmp(output_str, "right") == 0) {
@@ -103,7 +103,7 @@ void output_push_sticky_windows(Con *old_focus) {
                 bool ignore_focus = (old_focus == NULL) || (current != old_focus->parent);
                 con_move_to_workspace(current, visible_ws, true, false, ignore_focus);
                 if (!ignore_focus) {
-                    Con *current_ws = con_get_workspace(focused);
+                    Con *current_ws = con_get_workspace(con_first_focused());
                     con_activate(con_descend_focused(current));
                     /* Pushing sticky windows shouldn't change the focused workspace. */
                     con_activate(con_descend_focused(current_ws));

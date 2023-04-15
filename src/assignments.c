@@ -22,7 +22,7 @@ void run_assignments(i3Window *window) {
     /* Check if any assignments match */
     Assignment *current;
     TAILQ_FOREACH (current, &assignments, assignments) {
-        if (current->type != A_COMMAND || !match_matches_window(&(current->match), window))
+        if (current->type != A_COMMAND || !match_matches_window(NULL, &(current->match), window))
             continue;
 
         bool skip = false;
@@ -71,7 +71,7 @@ Assignment *assignment_for(i3Window *window, int type) {
 
     TAILQ_FOREACH (assignment, &assignments, assignments) {
         if ((type != A_ANY && (assignment->type & type) == 0) ||
-            !match_matches_window(&(assignment->match), window))
+            !match_matches_window(NULL, &(assignment->match), window))
             continue;
         DLOG("got a matching assignment\n");
         return assignment;

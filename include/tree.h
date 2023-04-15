@@ -14,7 +14,8 @@
 extern Con *croot;
 /* TODO: i am not sure yet how much access to the focused container should
  * be permitted to source files */
-extern Con *focused;
+TAILQ_HEAD(all_devices_head, Device);
+extern struct all_devices_head all_devices;
 TAILQ_HEAD(all_cons_head, Con);
 extern struct all_cons_head all_cons;
 
@@ -30,7 +31,7 @@ void tree_init(xcb_get_geometry_reply_t *geometry);
  * Opens an empty container in the current container
  *
  */
-Con *tree_open_con(Con *con, i3Window *window);
+Con *tree_open_con(Device *device, Con *con, i3Window *window);
 
 /**
  * Splits (horizontally or vertically) the given container by creating a new
@@ -43,13 +44,13 @@ void tree_split(Con *con, orientation_t orientation);
  * Moves focus one level up. Returns true if focus changed.
  *
  */
-bool level_up(void);
+bool level_up(Device *device);
 
 /**
  * Moves focus one level down. Returns true if focus changed.
  *
  */
-bool level_down(void);
+bool level_down(Device *device);
 
 /**
  * Renders the tree, that is rendering all outputs using render_con() and

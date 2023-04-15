@@ -21,7 +21,7 @@ typedef enum { CLICK_BORDER = 0,
  * then calls resize_graphical_handler().
  *
  */
-static bool tiling_resize_for_border(Con *con, border_t border, xcb_button_press_event_t *event, bool use_threshold) {
+static bool tiling_resize_for_border(Con *con, border_t border, xcb_input_button_press_event_t *event, bool use_threshold) {
     DLOG("border = %d, con = %p\n", border, con);
     Con *second = NULL;
     Con *first = con;
@@ -78,7 +78,7 @@ static bool tiling_resize_for_border(Con *con, border_t border, xcb_button_press
  * to the client).
  *
  */
-static bool floating_mod_on_tiled_client(Con *con, xcb_button_press_event_t *event) {
+static bool floating_mod_on_tiled_client(Con *con, xcb_input_button_press_event_t *event) {
     /* The client is in tiling layout. We can still initiate a resize with the
      * right mouse button, by choosing the border which is the most near one to
      * the position of the mouse pointer */
@@ -117,7 +117,7 @@ static bool floating_mod_on_tiled_client(Con *con, xcb_button_press_event_t *eve
  * Finds out which border was clicked on and calls tiling_resize_for_border().
  *
  */
-static bool tiling_resize(Con *con, xcb_button_press_event_t *event, const click_destination_t dest, bool use_threshold) {
+static bool tiling_resize(Con *con, xcb_input_button_press_event_t *event, const click_destination_t dest, bool use_threshold) {
     /* check if this was a click on the window border (and on which one) */
     Rect bsr = con_border_style_rect(con);
     DLOG("BORDER x = %d, y = %d for con %p, window 0x%08x\n",
@@ -152,7 +152,7 @@ static void allow_replay_pointer(xcb_timestamp_t time) {
  * functions for resizing/dragging.
  *
  */
-static void route_click(Con *con, xcb_button_press_event_t *event, const bool mod_pressed, const click_destination_t dest) {
+static void route_click(Con *con, xcb_input_button_press_event_t *event, const bool mod_pressed, const click_destination_t dest) {
     DLOG("--> click properties: mod = %d, destination = %d\n", mod_pressed, dest);
     DLOG("--> OUTCOME = %p\n", con);
     DLOG("type = %d, name = %s\n", con->type, con->name);
@@ -189,6 +189,8 @@ static void route_click(Con *con, xcb_button_press_event_t *event, const bool mo
      * workspace is on another output we need to do a workspace_show in
      * order for i3bar (and others) to notice the change in workspace. */
     Con *ws = con_get_workspace(con);
+    Device *device = device_by_id(event->deviceid);
+    Con *focused = con_by_device(device);
     Con *focused_workspace = con_get_workspace(focused);
 
     if (!ws) {
@@ -201,7 +203,7 @@ static void route_click(Con *con, xcb_button_press_event_t *event, const bool mo
 
     /* get the floating con */
     Con *floatingcon = con_inside_floating(con);
-    const bool proportional = (event->state & XCB_KEY_BUT_MASK_SHIFT) == XCB_KEY_BUT_MASK_SHIFT;
+    const bool proportional = (event->mods.effective & XCB_KEY_BUT_MASK_SHIFT) == XCB_KEY_BUT_MASK_SHIFT;
     const bool in_stacked = (con->parent->layout == L_STACKED || con->parent->layout == L_TABBED);
     const bool was_focused = focused == con;
     const bool is_left_click = (event->detail == XCB_BUTTON_CLICK_LEFT);
@@ -252,7 +254,7 @@ static void route_click(Con *con, xcb_button_press_event_t *event, const bool mo
         }
     }
     if (ws != focused_workspace) {
-        workspace_show(ws);
+        workspace_show(device, ws);
     }
     con_activate(con_to_focus);
 
@@ -349,17 +351,17 @@ static void route_click(Con *con, xcb_button_press_event_t *event, const bool mo
  * Then, route_click is called on the appropriate con.
  *
  */
-void handle_button_press(xcb_button_press_event_t *event) {
+void handle_button_press(xcb_input_button_press_event_t *event) {
     Con *con;
-    DLOG("Button %d (state %d) %s on window 0x%08x (child 0x%08x) at (%d, %d) (root %d, %d)\n",
-         event->detail, event->state, (event->response_type == XCB_BUTTON_PRESS ? "press" : "release"),
+    DLOG("Button %d %s on window 0x%08x (child 0x%08x) at (%d, %d) (root %d, %d)\n",
+         event->detail, (event->response_type == XCB_BUTTON_PRESS ? "press" : "release"),
          event->event, event->child, event->event_x, event->event_y, event->root_x,
          event->root_y);
 
     last_timestamp = event->time;
 
     const uint32_t mod = (config.floating_modifier & 0xFFFF);
-    const bool mod_pressed = (mod != 0 && (event->state & mod) == mod);
+    const bool mod_pressed = (mod != 0 && (event->mods.effective & mod) == mod);
     DLOG("floating_mod = %d, detail = %d\n", mod_pressed, event->detail);
     if ((con = con_by_window_id(event->event))) {
         route_click(con, event, mod_pressed, CLICK_INSIDE);
@@ -388,8 +390,9 @@ void handle_button_press(xcb_button_press_event_t *event) {
                     continue;
 
                 ws = TAILQ_FIRST(&(output_get_content(output)->focus_head));
-                if (ws != con_get_workspace(focused)) {
-                    workspace_show(ws);
+                Device *device = device_by_id(event->deviceid);
+                if (ws != con_get_workspace(con_by_device(device))) {
+                    workspace_show(device, ws);
                     tree_render();
                 }
                 return;

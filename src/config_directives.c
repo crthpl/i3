@@ -118,7 +118,7 @@ CFGFUN(criteria_pop_state) {
  *
  */
 CFGFUN(criteria_add, const char *ctype, const char *cvalue) {
-    match_parse_property(current_match, ctype, cvalue);
+    match_parse_property(device_first_focused(), current_match, ctype, cvalue);
 }
 
 /*******************************************************************************

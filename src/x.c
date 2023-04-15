@@ -16,17 +16,6 @@
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 #endif
 
-/* Stores the X11 window ID of the currently focused window */
-xcb_window_t focused_id = XCB_NONE;
-
-/* Because 'focused_id' might be reset to force input focus, we separately keep
- * track of the X11 window ID to be able to always tell whether the focused
- * window actually changed. */
-static xcb_window_t last_focused = XCB_NONE;
-
-/* Stores coordinates to warp mouse pointer to if set */
-static Rect *warp_to;
-
 /*
  * Describes the X11 state we may modify (map state, position, window stack).
  * There is one entry per container. The state represents the current situation
@@ -62,6 +51,9 @@ typedef struct con_state {
     bool initial;
 
     char *name;
+
+    /* ClientPointer device. */
+    Device *client_pointer;
 
     CIRCLEQ_ENTRY(con_state) state;
     CIRCLEQ_ENTRY(con_state) old_state;
@@ -268,14 +260,6 @@ static void _x_con_kill(Con *con) {
     TAILQ_REMOVE(&initial_mapping_head, state, initial_mapping_order);
     FREE(state->name);
     free(state);
-
-    /* Invalidate focused_id to correctly focus new windows with the same ID */
-    if (con->frame.id == focused_id) {
-        focused_id = XCB_NONE;
-    }
-    if (con->frame.id == last_focused) {
-        last_focused = XCB_NONE;
-    }
 }
 
 /*
@@ -490,7 +474,7 @@ void x_draw_decoration(Con *con) {
     /* find out which colors to use */
     if (con->urgent) {
         p->color = &config.client.urgent;
-    } else if (con == focused || con_inside_focused(con)) {
+    } else if (con_is_focused(con) || con_inside_focused(con)) {
         p->color = &config.client.focused;
     } else if (con == TAILQ_FIRST(&(parent->focus_head))) {
         if (config.client.got_focused_tab_title && !leaf && con_descend_focused(con) == focused) {

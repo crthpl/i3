@@ -15,6 +15,7 @@
 #include <libsn/sn-launcher.h>
 
 #include <xcb/randr.h>
+#include <xcb/xinput.h>
 #include <pcre2.h>
 #include <sys/time.h>
 #include <cairo/cairo.h>
@@ -44,6 +45,7 @@ typedef struct Binding Binding;
 typedef struct Rect Rect;
 typedef struct xoutput Output;
 typedef struct Con Con;
+typedef struct Device Device;
 typedef struct Match Match;
 typedef struct Assignment Assignment;
 typedef struct Window i3Window;
@@ -230,6 +232,18 @@ struct deco_render_params {
     color_t background;
     layout_t parent_layout;
     bool con_is_leaf;
+};
+
+/**
+ * Stores XInput2 master device information.
+ *
+ */
+struct Device {
+    xcb_input_device_id_t id;
+    xcb_input_device_id_t pair; // The ID of the paired device (keyboard <-> pointer)
+    bool is_ptr; // otherwise keyboard
+    Con *focus; // which Con has the focus of this device, otherwise NULL
+    TAILQ_ENTRY(Device) devices;
 };
 
 /**
@@ -675,6 +689,8 @@ struct Con {
     /** the workspace number, if this Con is of type CT_WORKSPACE and the
      * workspace is not a named workspace (for named workspaces, num == -1) */
     int num;
+    /** if this is a focused workspace */
+    bool is_focused_workspace;
 
     /** Only applicable for containers of type CT_WORKSPACE. */
     gaps_t gaps;
@@ -727,10 +743,14 @@ struct Con {
     /** Cache for the decoration rendering */
     struct deco_render_params *deco_render_params;
 
+    int nfocused;
+    int last_nfocused;
+
     /* Only workspace-containers can have floating clients */
     TAILQ_HEAD(floating_head, Con) floating_head;
 
     TAILQ_HEAD(nodes_head, Con) nodes_head;
+    /* focus order */
     TAILQ_HEAD(focus_head, Con) focus_head;
 
     TAILQ_HEAD(swallow_head, Match) swallow_head;
@@ -781,6 +801,7 @@ struct Con {
     } floating;
 
     TAILQ_ENTRY(Con) nodes;
+    /* focus order */
     TAILQ_ENTRY(Con) focused;
     TAILQ_ENTRY(Con) all_cons;
     TAILQ_ENTRY(Con) floating_windows;

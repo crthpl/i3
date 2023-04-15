@@ -72,7 +72,7 @@ extern uint8_t root_depth;
 extern xcb_visualid_t visual_id;
 extern xcb_colormap_t colormap;
 
-extern bool xkb_supported, shape_supported;
+extern bool xkb_supported, shape_supported, xi2_supported;
 extern xcb_window_t root;
 extern struct ev_loop *main_loop;
 extern bool only_check_config;

@@ -86,7 +86,7 @@ void match_copy(Match *dest, Match *src) {
  * Check if a match data structure matches the given window.
  *
  */
-bool match_matches_window(Match *match, i3Window *window) {
+bool match_matches_window(Device *device, Match *match, i3Window *window) {
     LOG("Checking window 0x%08x (class %s)\n", window->id, window->class_class);
 
 #define GET_FIELD_str(field) (field)
@@ -108,7 +108,7 @@ bool match_matches_window(Match *match, i3Window *window) {
             }                                                                                     \
         }                                                                                         \
     } while (0)
-
+    Con *focused = con_by_device(device);
     CHECK_WINDOW_FIELD(class, class_class, str);
     CHECK_WINDOW_FIELD(instance, class_instance, str);
 
@@ -288,7 +288,7 @@ void match_free(Match *match) {
  * Interprets a ctype=cvalue pair and adds it to the given match specification.
  *
  */
-void match_parse_property(Match *match, const char *ctype, const char *cvalue) {
+void match_parse_property(Device *device, Match *match, const char *ctype, const char *cvalue) {
     assert(match != NULL);
     DLOG("ctype=*%s*, cvalue=*%s*\n", ctype, cvalue);
 
@@ -312,7 +312,7 @@ void match_parse_property(Match *match, const char *ctype, const char *cvalue) {
 
     if (strcmp(ctype, "con_id") == 0) {
         if (strcmp(cvalue, "__focused__") == 0) {
-            match->con_id = focused;
+            match->con_id = con_by_device(device);
             return;
         }
 

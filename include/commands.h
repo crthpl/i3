@@ -14,7 +14,7 @@
 #include "commands_parser.h"
 
 /** The beginning of the prototype for every cmd_ function. */
-#define I3_CMD Match *current_match, struct CommandResultIR *cmd_output
+#define I3_CMD Device *device, Match *current_match, struct CommandResultIR *cmd_output
 
 /**
  * Initializes the specified 'Match' data structure and the initial state of

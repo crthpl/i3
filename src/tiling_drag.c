@@ -301,7 +301,7 @@ static xcb_window_t create_drop_indicator(Rect rect) {
  * Initiates a mouse drag operation on a tiled window.
  *
  */
-void tiling_drag(Con *con, xcb_button_press_event_t *event, bool use_threshold) {
+void tiling_drag(Con *con, xcb_input_button_press_event_t *event, bool use_threshold) {
     DLOG("Start dragging tiled container: con = %p\n", con);
     bool set_focus = (con == focused);
     bool set_fs = con->fullscreen_mode != CF_NONE;

@@ -242,6 +242,9 @@ void manage_window(xcb_window_t window, xcb_get_window_attributes_cookie_t cooki
     /* read the preferred _NET_WM_WINDOW_TYPE atom */
     cwindow->window_type = xcb_get_preferred_window_type(type_reply);
 
+    /* todo: attempt to determine which device started the window */
+    Device *device = device_first_focused();
+
     /* Where to start searching for a container that swallows the new one? */
     Con *search_at = croot;
 
@@ -299,15 +302,15 @@ void manage_window(xcb_window_t window, xcb_get_window_attributes_cookie_t cooki
             /* A_TO_WORKSPACE type assignment or fallback from A_TO_WORKSPACE_NUMBER
              * when the target workspace number does not exist yet. */
             if (!assigned_ws) {
-                assigned_ws = workspace_get(assignment->dest.workspace);
+                assigned_ws = workspace_get(device, assignment->dest.workspace);
             }
 
             nc = con_descend_tiling_focused(assigned_ws);
             DLOG("focused on ws %s: %p / %s\n", assigned_ws->name, nc, nc->name);
             if (nc->type == CT_WORKSPACE)
-                nc = tree_open_con(nc, cwindow);
+                nc = tree_open_con(device, nc, cwindow);
             else
-                nc = tree_open_con(nc->parent, cwindow);
+                nc = tree_open_con(device, nc->parent, cwindow);
 
             /* set the urgency hint on the window if the workspace is not visible */
             if (!workspace_is_visible(assigned_ws))
@@ -324,26 +327,27 @@ void manage_window(xcb_window_t window, xcb_get_window_attributes_cookie_t cooki
 
             nc = con_descend_tiling_focused(wm_desktop_ws);
             if (nc->type == CT_WORKSPACE)
-                nc = tree_open_con(nc, cwindow);
+                nc = tree_open_con(device, nc, cwindow);
             else
-                nc = tree_open_con(nc->parent, cwindow);
+                nc = tree_open_con(device, nc->parent, cwindow);
         } else if (startup_ws) {
             /* If it was started on a specific workspace, we want to open it there. */
             DLOG("Using workspace on which this application was started (%s)\n", startup_ws);
-            nc = con_descend_tiling_focused(workspace_get(startup_ws));
+            nc = con_descend_tiling_focused(workspace_get(device, startup_ws));
             DLOG("focused on ws %s: %p / %s\n", startup_ws, nc, nc->name);
             if (nc->type == CT_WORKSPACE)
-                nc = tree_open_con(nc, cwindow);
+                nc = tree_open_con(device, nc, cwindow);
             else
-                nc = tree_open_con(nc->parent, cwindow);
+                nc = tree_open_con(device, nc->parent, cwindow);
         } else {
             /* If not, insert it at the currently focused position */
+            Con *focused = con_by_device(device);
             if (focused->type == CT_CON && con_accepts_window(focused)) {
                 LOG("using current container, focused = %p, focused->name = %s\n",
                     focused, focused->name);
                 nc = focused;
             } else
-                nc = tree_open_con(NULL, cwindow);
+                nc = tree_open_con(device, NULL, cwindow);
         }
 
         if ((assignment = assignment_for(cwindow, A_TO_OUTPUT))) {
@@ -353,7 +357,7 @@ void manage_window(xcb_window_t window, xcb_get_window_attributes_cookie_t cooki
         /* M_BELOW inserts the new window as a child of the one which was
          * matched (e.g. dock areas) */
         if (match != NULL && match->insert_where == M_BELOW) {
-            nc = tree_open_con(nc, cwindow);
+            nc = tree_open_con(device, nc, cwindow);
         }
 
         /* If M_BELOW is not used, the container is replaced. This happens with
@@ -422,7 +426,7 @@ void manage_window(xcb_window_t window, xcb_get_window_attributes_cookie_t cooki
             /* Check that the workspace is visible and on the same output as
              * the current focused container. If the window was assigned to an
              * invisible workspace, we should not steal focus. */
-            Con *current_output = con_get_output(focused);
+            Con *current_output = con_get_output(con_by_device(device));
             Con *target_output = con_get_output(ws);
 
             if (workspace_is_visible(ws) && current_output == target_output) {
@@ -570,6 +574,22 @@ void manage_window(xcb_window_t window, xcb_get_window_attributes_cookie_t cooki
         FREE(reply);
     }
 
+    if (xi2_supported) {
+        struct {
+            xcb_input_event_mask_t header;
+            xcb_input_xi_event_mask_t mask;
+        } eventmask;
+        eventmask.header.deviceid = XCB_INPUT_DEVICE_ALL_MASTER;
+        eventmask.header.mask_len = sizeof(eventmask.mask) / sizeof(uint32_t);
+        eventmask.mask = XCB_INPUT_XI_EVENT_MASK_ENTER |
+            XCB_INPUT_XI_EVENT_MASK_FOCUS_IN |
+            XCB_INPUT_XI_EVENT_MASK_FOCUS_OUT;
+        xcb_void_cookie_t cookie = xcb_input_xi_select_events_checked(conn, window, 1, &eventmask.header);
+        if (xcb_request_check(conn, cookie) != NULL) {
+            LOG("Could not select XI2 events for window 0x%08x\n", window);
+        }
+    }
+
     /* Check if any assignments match */
     run_assignments(cwindow);
 
@@ -670,7 +690,7 @@ void manage_window(xcb_window_t window, xcb_get_window_attributes_cookie_t cooki
     ewmh_update_wm_desktop();
 
     /* If a sticky window was mapped onto another workspace, make sure to pop it to the front. */
-    output_push_sticky_windows(focused);
+    output_push_sticky_windows(con_by_device(device));
 
 geom_out:
     free(geom);

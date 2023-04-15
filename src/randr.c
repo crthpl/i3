@@ -441,7 +441,7 @@ void output_init_con(Output *output) {
  */
 void init_ws_for_output(Output *output) {
     Con *content = output_get_content(output->con);
-    Con *previous_focus = con_get_workspace(focused);
+    Con *previous_focus = con_get_workspace(con_first_focused());
 
     /* Iterate over all workspaces and check if any of them should be assigned
      * to this output.
@@ -472,7 +472,7 @@ void init_ws_for_output(Output *output) {
     }
 
     /* Temporarily set the focused container, might not be initialized yet. */
-    focused = content;
+    device_set_focus(device_first_focused(), content);
 
     /* if a workspace exists, we are done now */
     if (!TAILQ_EMPTY(&(content->nodes_head))) {
@@ -846,7 +846,7 @@ static void move_content(Con *con) {
 
     /* We need to move the workspaces from the disappearing output to the first output */
     /* 1: Get the con to focus next */
-    Con *next = focused;
+    Con *next = con_first_focused();
 
     /* 2: iterate through workspaces and re-assign them, fixing the coordinates
      * of floating containers as we go */

@@ -10,8 +10,8 @@
 #include "all.h"
 
 struct Con *croot;
-struct Con *focused;
 
+struct all_devices_head all_devices = TAILQ_HEAD_INITIALIZER(all_devices);
 struct all_cons_head all_cons = TAILQ_HEAD_INITIALIZER(all_cons);
 
 /*
@@ -86,9 +86,12 @@ bool tree_restore(const char *path, xcb_get_geometry_reply_t *geometry) {
         geometry->y,
         geometry->width,
         geometry->height};
-    focused = croot;
+    Device *device;
+    TAILQ_FOREACH(device, &all_devices, devices) {
+        device_set_focus(device, croot);
+    }
 
-    tree_append_json(focused, buf, len, NULL);
+    tree_append_json(croot, buf, len, NULL);
 
     DLOG("appended tree, using new root\n");
     croot = TAILQ_FIRST(&(croot->nodes_head));
@@ -146,9 +149,10 @@ void tree_init(xcb_get_geometry_reply_t *geometry) {
  * Opens an empty container in the current container
  *
  */
-Con *tree_open_con(Con *con, i3Window *window) {
+Con *tree_open_con(Device *device, Con *con, i3Window *window) {
     if (con == NULL) {
         /* every focusable Con has a parent (outputs have parent root) */
+        Con *focused = con_by_device(device);
         con = focused->parent;
         /* If the parent is an output, we are on a workspace. In this case,
          * the new container needs to be opened as a leaf of the workspace. */
@@ -265,8 +269,8 @@ bool tree_close_internal(Con *con, kill_window_t kill_window, bool dont_kill_par
     Con *ws = con_get_workspace(con);
 
     /* Figure out which container to focus next before detaching 'con'. */
-    Con *next = (con == focused) ? con_next_focused(con) : NULL;
-    DLOG("next = %p, focused = %p\n", next, focused);
+    Con *next = (con_is_focused(con)) ? con_next_focused(con) : NULL;
+    DLOG("next = %p\n", next);
 
     /* Detach the container so that it will not be rendered anymore. */
     con_detach(con);
@@ -383,9 +387,10 @@ void tree_split(Con *con, orientation_t orientation) {
  * Moves focus one level up. Returns true if focus changed.
  *
  */
-bool level_up(void) {
+bool level_up(Device *device) {
     /* Skip over floating containers and go directly to the grandparent
      * (which should always be a workspace) */
+    Con *focused = con_by_device(device);
     if (focused->parent->type == CT_FLOATING_CON) {
         con_activate(focused->parent->parent);
         return true;
@@ -406,8 +411,9 @@ bool level_up(void) {
  * Moves focus one level down. Returns true if focus changed.
  *
  */
-bool level_down(void) {
+bool level_down(Device *device) {
     /* Go down the focus stack of the current node */
+    Con *focused = con_by_device(device);
     Con *next = TAILQ_FIRST(&(focused->focus_head));
     if (next == TAILQ_END(&(focused->focus_head))) {
         DLOG("cannot go down\n");

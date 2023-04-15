@@ -27,7 +27,7 @@ xcb_window_t ewmh_window;
  */
 void ewmh_update_current_desktop(void) {
     static uint32_t old_idx = NET_WM_DESKTOP_NONE;
-    const uint32_t idx = ewmh_get_workspace_index(focused);
+    const uint32_t idx = ewmh_get_workspace_index(con_by_device(device_first_focused()));
 
     if (idx == old_idx || idx == NET_WM_DESKTOP_NONE) {
         return;

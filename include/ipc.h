@@ -40,6 +40,8 @@ typedef struct ipc_client {
     uint8_t *buffer;
     size_t buffer_size;
 
+    Device *device;
+
     TAILQ_ENTRY(ipc_client) clients;
 } ipc_client;
 

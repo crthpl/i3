@@ -29,7 +29,7 @@ void scratchpad_move(Con *con);
  * can press the same key to quickly look something up).
  *
  */
-bool scratchpad_show(Con *con);
+bool scratchpad_show(Device *device, Con *con);
 
 /**
  * When starting i3 initially (and after each change to the connected outputs),

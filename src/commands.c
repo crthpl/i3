@@ -67,7 +67,7 @@
                 free(ow);                               \
             }                                           \
             owindow *ow = smalloc(sizeof(owindow));     \
-            ow->con = focused;                          \
+            ow->con = con_by_device(device);                   \
             TAILQ_INIT(&owindows);                      \
             TAILQ_INSERT_TAIL(&owindows, ow, owindows); \
         }                                               \
@@ -80,8 +80,8 @@
  * and return true, signaling that no further workspace switching should occur in the calling function.
  *
  */
-static bool maybe_back_and_forth(struct CommandResultIR *cmd_output, const char *name) {
-    Con *ws = con_get_workspace(focused);
+static bool maybe_back_and_forth(Device *device, struct CommandResultIR *cmd_output, const char *name) {
+    Con *ws = con_get_workspace(con_by_device(device));
 
     /* If we switched to a different workspace, do nothing */
     if (strcmp(ws->name, name) != 0)
@@ -99,13 +99,13 @@ static bool maybe_back_and_forth(struct CommandResultIR *cmd_output, const char 
  * Return the passed workspace unless it is the current one and auto back and
  * forth is enabled, in which case the back_and_forth workspace is returned.
  */
-static Con *maybe_auto_back_and_forth_workspace(Con *workspace) {
+static Con *maybe_auto_back_and_forth_workspace(Device *device, Con *workspace) {
     Con *current, *baf;
 
     if (!config.workspace_auto_back_and_forth)
         return workspace;
 
-    current = con_get_workspace(focused);
+    current = con_get_workspace(con_by_device(device));
 
     if (current == workspace) {
         baf = workspace_back_and_forth_get();
@@ -310,7 +310,7 @@ void cmd_move_con_to_workspace(I3_CMD, const char *which) {
     else if (strcmp(which, "prev_on_output") == 0)
         ws = workspace_prev_on_output();
     else if (strcmp(which, "current") == 0)
-        ws = con_get_workspace(focused);
+        ws = con_get_workspace(con_by_device(device));
     else {
         yerror("BUG: called with which=%s", which);
         return;
@@ -360,7 +360,7 @@ void cmd_move_con_to_workspace_name(I3_CMD, const char *name, const char *no_aut
     Con *ws = workspace_get(name);
 
     if (no_auto_back_and_forth == NULL) {
-        ws = maybe_auto_back_and_forth_workspace(ws);
+        ws = maybe_auto_back_and_forth_workspace(device, ws);
     }
 
     move_matches_to_workspace(ws);
@@ -392,7 +392,7 @@ void cmd_move_con_to_workspace_number(I3_CMD, const char *which, const char *no_
     }
 
     if (no_auto_back_and_forth == NULL) {
-        ws = maybe_auto_back_and_forth_workspace(ws);
+        ws = maybe_auto_back_and_forth_workspace(device, ws);
     }
 
     move_matches_to_workspace(ws);
@@ -554,7 +554,7 @@ static bool cmd_resize_tiling_width_height(I3_CMD, Con *current, const char *dir
             }
         }
     }
-
+(void) {
     current->percent = new_current_percent;
     LOG("current->percent after = %f\n", current->percent);
 
@@ -800,7 +800,7 @@ void cmd_append_layout(I3_CMD, const char *cpath) {
         goto out;
     }
 
-    Con *parent = focused;
+    Con *parent = con_by_device(device);
     if (content == JSON_CONTENT_WORKSPACE) {
         parent = output_get_content(con_get_output(parent));
     } else {
@@ -811,7 +811,7 @@ void cmd_append_layout(I3_CMD, const char *cpath) {
         while (parent->type != CT_WORKSPACE && !con_accepts_window(parent))
             parent = parent->parent;
     }
-    DLOG("Appending to parent=%p instead of focused=%p\n", parent, focused);
+    DLOG("Appending to parent=%p instead of focused=%p\n", parent, con_by_device(device));
     char *errormsg = NULL;
     tree_append_json(parent, buf, len, &errormsg);
     if (errormsg != NULL) {
@@ -1396,10 +1396,10 @@ void cmd_focus_sibling(I3_CMD, const char *direction_str) {
  */
 void cmd_focus_window_mode(I3_CMD, const char *window_mode) {
     DLOG("window_mode = %s\n", window_mode);
-
+    Con *focused = con_by_device(device)
     bool to_floating = false;
     if (strcmp(window_mode, "mode_toggle") == 0) {
-        to_floating = !con_inside_floating(focused);
+        to_floating = !con_inside_floating();
     } else if (strcmp(window_mode, "floating") == 0) {
         to_floating = true;
     } else if (strcmp(window_mode, "tiling") == 0) {
@@ -1438,6 +1438,7 @@ void cmd_focus_level(I3_CMD, const char *level) {
     /* Focusing the parent can only be allowed if the newly
      * focused container won't escape the fullscreen container. */
     if (strcmp(level, "parent") == 0) {
+        Con *focused = con_by_device(device);
         if (focused && focused->parent) {
             if (con_fullscreen_permits_focusing(focused->parent))
                 success = level_up();
@@ -1448,7 +1449,7 @@ void cmd_focus_level(I3_CMD, const char *level) {
 
     /* Focusing a child should always be allowed. */
     else
-        success = level_down();
+        success = level_down(device);
 
     cmd_output->needs_tree_render = success;
     // XXX: default reply for now, make this a better reply
@@ -1559,7 +1560,7 @@ void cmd_sticky(I3_CMD, const char *action) {
 
     /* A window we made sticky might not be on a visible workspace right now, so we need to make
      * sure it gets pushed to the front now. */
-    output_push_sticky_windows(focused);
+    output_push_sticky_windows(con_by_device(device));
 
     ewmh_update_wm_desktop();
 
@@ -1575,7 +1576,7 @@ void cmd_move_direction(I3_CMD, const char *direction_str, long amount, const ch
     owindow *current;
     HANDLE_EMPTY_MATCH;
 
-    Con *initially_focused = focused;
+    Con *initially_focused = con_by_device(device);
     direction_t direction = parse_direction(direction_str);
 
     const bool is_ppt = mode && strcmp(mode, "ppt") == 0;
@@ -1611,7 +1612,7 @@ void cmd_move_direction(I3_CMD, const char *direction_str, long amount, const ch
 
     /* The move command should not disturb focus. con_exists is called because
      * tree_move calls tree_flatten. */
-    if (focused != initially_focused && con_exists(initially_focused)) {
+    if (con_by_device(device) != initially_focused && con_exists(initially_focused)) {
         con_activate(initially_focused);
     }
 
@@ -1664,7 +1665,7 @@ void cmd_layout_toggle(I3_CMD, const char *toggle_mode) {
 
     /* check if the match is empty, not if the result is empty */
     if (match_is_empty(current_match))
-        con_toggle_layout(focused, toggle_mode);
+        con_toggle_layout(con_by_device(device), toggle_mode);
     else {
         TAILQ_FOREACH (current, &owindows, owindows) {
             DLOG("matching: %p / %s\n", current->con, current->con->name);
@@ -2135,6 +2136,7 @@ void cmd_rename_workspace(I3_CMD, const char *old_name, const char *new_name) {
     }
 
     Con *workspace;
+    Con *focused = con_by_device(device);
     if (old_name) {
         workspace = get_existing_workspace_by_name(old_name);
     } else {
@@ -2402,9 +2404,9 @@ static int *gaps_right(gaps_t *gaps) {
 
 typedef int *(*gap_accessor)(gaps_t *);
 
-static bool gaps_update(gap_accessor get, const char *scope, const char *mode, int pixels) {
+static bool gaps_update(Device *device, gap_accessor get, const char *scope, const char *mode, int pixels) {
     DLOG("gaps_update(scope=%s, mode=%s, pixels=%d)\n", scope, mode, pixels);
-    Con *workspace = con_get_workspace(focused);
+    Con *workspace = con_get_workspace(con_by_device(device));
 
     const int global_gap_size = *get(&(config.gaps));
     int current_value = global_gap_size;
@@ -2490,48 +2492,48 @@ void cmd_gaps(I3_CMD, const char *type, const char *scope, const char *mode, con
     int pixels = logical_px(atoi(value));
 
     if (!strcmp(type, "inner")) {
-        if (!gaps_update(gaps_inner, scope, mode, pixels)) {
+        if (!gaps_update(device, gaps_inner, scope, mode, pixels)) {
             goto error;
         }
         /* Update all workspaces with a no-op change (plus 0) so that the
          * minimum value is re-calculated and applied as a side effect. */
-        if (!gaps_update(gaps_top, "all", "plus", 0) ||
-            !gaps_update(gaps_bottom, "all", "plus", 0) ||
-            !gaps_update(gaps_right, "all", "plus", 0) ||
-            !gaps_update(gaps_left, "all", "plus", 0)) {
+        if (!gaps_update(device, gaps_top, "all", "plus", 0) ||
+            !gaps_update(device, gaps_bottom, "all", "plus", 0) ||
+            !gaps_update(device, gaps_right, "all", "plus", 0) ||
+            !gaps_update(device, gaps_left, "all", "plus", 0)) {
             goto error;
         }
     } else if (!strcmp(type, "outer")) {
-        if (!gaps_update(gaps_top, scope, mode, pixels) ||
-            !gaps_update(gaps_bottom, scope, mode, pixels) ||
-            !gaps_update(gaps_right, scope, mode, pixels) ||
-            !gaps_update(gaps_left, scope, mode, pixels)) {
+        if (!gaps_update(device, gaps_top, scope, mode, pixels) ||
+            !gaps_update(device, gaps_bottom, scope, mode, pixels) ||
+            !gaps_update(device, gaps_right, scope, mode, pixels) ||
+            !gaps_update(device, gaps_left, scope, mode, pixels)) {
             goto error;
         }
     } else if (!strcmp(type, "vertical")) {
-        if (!gaps_update(gaps_top, scope, mode, pixels) ||
-            !gaps_update(gaps_bottom, scope, mode, pixels)) {
+        if (!gaps_update(device, gaps_top, scope, mode, pixels) ||
+            !gaps_update(device, gaps_bottom, scope, mode, pixels)) {
             goto error;
         }
     } else if (!strcmp(type, "horizontal")) {
-        if (!gaps_update(gaps_right, scope, mode, pixels) ||
-            !gaps_update(gaps_left, scope, mode, pixels)) {
+        if (!gaps_update(device, gaps_right, scope, mode, pixels) ||
+            !gaps_update(device, gaps_left, scope, mode, pixels)) {
             goto error;
         }
     } else if (!strcmp(type, "top")) {
-        if (!gaps_update(gaps_top, scope, mode, pixels)) {
+        if (!gaps_update(device, gaps_top, scope, mode, pixels)) {
             goto error;
         }
     } else if (!strcmp(type, "bottom")) {
-        if (!gaps_update(gaps_bottom, scope, mode, pixels)) {
+        if (!gaps_update(device, gaps_bottom, scope, mode, pixels)) {
             goto error;
         }
     } else if (!strcmp(type, "right")) {
-        if (!gaps_update(gaps_right, scope, mode, pixels)) {
+        if (!gaps_update(device, gaps_right, scope, mode, pixels)) {
             goto error;
         }
     } else if (!strcmp(type, "left")) {
-        if (!gaps_update(gaps_left, scope, mode, pixels)) {
+        if (!gaps_update(device, gaps_left, scope, mode, pixels)) {
             goto error;
         }
     } else {

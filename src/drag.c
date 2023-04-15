@@ -21,7 +21,7 @@ struct drag_x11_cb {
     Con *con;
 
     /* The original event that initiated the drag. */
-    const xcb_button_press_event_t *event;
+    const xcb_input_button_press_event_t *event;
 
     /* The dimensions of con when the loop was started. */
     Rect old_rect;
@@ -38,6 +38,9 @@ struct drag_x11_cb {
 
     /* User data pointer for callback. */
     const void *extra;
+    
+    /* The device being used for dragging. */
+    Device *device;
 };
 
 static bool threshold_exceeded(uint32_t x1, uint32_t y1,
@@ -81,7 +84,7 @@ static bool drain_drag_events(EV_P, struct drag_x11_cb *dragloop) {
                 if (con != NULL) {
                     DLOG("UnmapNotify for window 0x%08x (container %p)\n", unmap_event->window, con);
 
-                    if (con_get_workspace(con) == con_get_workspace(focused)) {
+                    if (con_get_workspace(con) == con_get_workspace(con_by_device(dragloop->device))) {
                         DLOG("UnmapNotify for a managed window on the current workspace, aborting\n");
                         dragloop->result = DRAG_ABORT;
                     }
@@ -172,10 +175,11 @@ static void xcb_drag_prepare_cb(EV_P_ ev_prepare *w, int revents) {
  * callback will not be called until then.
  *
  */
-drag_result_t drag_pointer(Con *con, const xcb_button_press_event_t *event,
+drag_result_t drag_pointer(Con *con, const xcb_input_button_press_event_t *event,
                            xcb_window_t confine_to, int cursor,
                            bool use_threshold, callback_t callback,
                            const void *extra) {
+    Device *device = device_by_id(event->deviceid);
     xcb_cursor_t xcursor = cursor ? xcursor_get_cursor(cursor) : XCB_NONE;
 
     /* Grab the pointer */
@@ -231,6 +235,7 @@ drag_result_t drag_pointer(Con *con, const xcb_button_press_event_t *event,
         .threshold_exceeded = !use_threshold,
         .xcursor = xcursor,
         .extra = extra,
+        .device = device,
     };
     ev_prepare *prepare = &loop.prepare;
     if (con)

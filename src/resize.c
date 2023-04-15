@@ -169,7 +169,7 @@ bool resize_neighboring_cons(Con *first, Con *second, int px, int ppt) {
 }
 
 void resize_graphical_handler(Con *first, Con *second, orientation_t orientation,
-                              const xcb_button_press_event_t *event,
+                              const xcb_input_button_press_event_t *event,
                               bool use_threshold) {
     Con *output = con_get_output(first);
     DLOG("x = %d, width = %d\n", output->rect.x, output->rect.width);

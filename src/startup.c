@@ -130,7 +130,7 @@ void startup_sequence_delete(struct Startup_Sequence *sequence) {
  * (and ID) should be created, which is the default and encouraged behavior.
  *
  */
-void start_application(const char *command, bool no_startup_id) {
+void start_application(Device *device, const char *command, bool no_startup_id) {
     SnLauncherContext *context = NULL;
 
     if (!no_startup_id) {
@@ -158,7 +158,7 @@ void start_application(const char *command, bool no_startup_id) {
 
         /* Save the ID and current workspace in our internal list of startup
          * sequences */
-        Con *ws = con_get_workspace(focused);
+        Con *ws = con_get_workspace(con_by_device(device));
         struct Startup_Sequence *sequence = scalloc(1, sizeof(struct Startup_Sequence));
         sequence->id = sstrdup(sn_launcher_context_get_startup_id(context));
         sequence->workspace = sstrdup(ws->name);

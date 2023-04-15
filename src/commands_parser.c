@@ -258,7 +258,7 @@ CommandResult *parse_command(const char *input, yajl_gen gen, ipc_client *client
 
 // TODO: make this testable
 #ifndef TEST_PARSER
-    cmd_criteria_init(&current_match, &subcommand_output);
+    cmd_criteria_init(client->device, &current_match, &subcommand_output);
 #endif
 
     /* The "<=" operator is intentional: We also handle the terminating 0-byte
@@ -341,7 +341,7 @@ CommandResult *parse_command(const char *input, yajl_gen gen, ipc_client *client
 // TODO: make this testable
 #ifndef TEST_PARSER
                     if (*walk == '\0' || *walk == ';')
-                        cmd_criteria_init(&current_match, &subcommand_output);
+                        cmd_criteria_init(client->device, &current_match, &subcommand_output);
 #endif
                     walk++;
                     break;

@@ -21,6 +21,7 @@ int randr_base = -1;
 int xkb_base = -1;
 int xkb_current_group;
 int shape_base = -1;
+int xi2_base = -1;
 
 /* After mapping/unmapping windows, a notify event is generated. However, we don’t want it,
    since it’d trigger an infinite loop of switching between the different windows when
@@ -85,7 +86,7 @@ bool event_is_ignored(const int sequence, const int response_type) {
  * current workspace, if so.
  *
  */
-static void check_crossing_screen_boundary(uint32_t x, uint32_t y) {
+static void check_crossing_screen_boundary(Device *device, uint32_t x, uint32_t y) {
     Output *output;
 
     /* If the user disable focus follows mouse, we have nothing to do here */
@@ -103,7 +104,7 @@ static void check_crossing_screen_boundary(uint32_t x, uint32_t y) {
     }
 
     /* Focus the output on which the user moved their cursor */
-    Con *old_focused = focused;
+    Con *old_focused = con_by_device(device);
     Con *next = con_descend_focused(output_get_content(output->con));
     /* Since we are switching outputs, this *must* be a different workspace, so
      * call workspace_show() */
@@ -111,7 +112,7 @@ static void check_crossing_screen_boundary(uint32_t x, uint32_t y) {
     con_focus(next);
 
     /* If the focus changed, we re-render to get updated decorations */
-    if (old_focused != focused)
+    if (old_focused != con_by_device(device))
         tree_render();
 }
 
@@ -119,13 +120,13 @@ static void check_crossing_screen_boundary(uint32_t x, uint32_t y) {
  * When the user moves the mouse pointer onto a window, this callback gets called.
  *
  */
-static void handle_enter_notify(xcb_enter_notify_event_t *event) {
+static void handle_enter(xcb_input_enter_event_t *event) {
     Con *con;
 
     last_timestamp = event->time;
 
-    DLOG("enter_notify for %08x, mode = %d, detail %d, serial %d\n",
-         event->event, event->mode, event->detail, event->sequence);
+    DLOG("enter_notify for %08x, mode = %d, detail %d, serial %d, device %d\n",
+         event->event, event->mode, event->detail, event->sequence, event->sourceid);
     DLOG("coordinates %d, %d\n", event->event_x, event->event_y);
     if (event->mode != XCB_NOTIFY_MODE_NORMAL) {
         DLOG("This was not a normal notify, ignoring\n");
@@ -144,13 +145,14 @@ static void handle_enter_notify(xcb_enter_notify_event_t *event) {
         con = con_by_window_id(event->event);
         enter_child = true;
     }
+    Device *device = device_by_id(event->sourceid);
 
     /* If we cannot find the container, the user moved their cursor to the root
      * window. In this case and if they used it to a dock, we need to focus the
      * workspace on the correct output. */
     if (con == NULL || con->parent->type == CT_DOCKAREA) {
         DLOG("Getting screen at %d x %d\n", event->root_x, event->root_y);
-        check_crossing_screen_boundary(event->root_x, event->root_y);
+        check_crossing_screen_boundary(device, event->root_x, event->root_y);
         return;
     }
 
@@ -171,17 +173,18 @@ static void handle_enter_notify(xcb_enter_notify_event_t *event) {
         return;
 
     /* if this container is already focused, there is nothing to do. */
-    if (con == focused)
+    if (con_is_focused(con))
         return;
 
     /* Get the currently focused workspace to check if the focus change also
      * involves changing workspaces. If so, we need to call workspace_show() to
      * correctly update state and send the IPC event. */
     Con *ws = con_get_workspace(con);
-    if (ws != con_get_workspace(focused))
+    if (ws != con_get_workspace(con_by_device(device))) {
         workspace_show(ws);
+    }
 
-    focused_id = XCB_NONE;
+    device_unfocus(device);
     con_focus(con_descend_focused(con));
     tree_render();
 }
@@ -192,7 +195,7 @@ static void handle_enter_notify(xcb_enter_notify_event_t *event) {
  * and crossing virtual screen boundaries), this callback gets called.
  *
  */
-static void handle_motion_notify(xcb_motion_notify_event_t *event) {
+static void handle_motion(xcb_input_motion_notify_event_t *event) {
     last_timestamp = event->time;
 
     /* Skip events where the pointer was over a child window, we are only
@@ -201,9 +204,10 @@ static void handle_motion_notify(xcb_motion_notify_event_t *event) {
         return;
 
     Con *con;
+    Device *device = device_by_id(event->device_id);
     if ((con = con_by_frame_id(event->event)) == NULL) {
         DLOG("MotionNotify for an unknown container, checking if it crosses screen boundaries.\n");
-        check_crossing_screen_boundary(event->root_x, event->root_y);
+        check_crossing_screen_boundary(device, event->root_x, event->root_y);
         return;
     }
 
@@ -708,7 +712,8 @@ static void handle_client_message(xcb_client_message_event_t *event) {
 
             DLOG("New sticky status for con = %p is %i.\n", con, con->sticky);
             ewmh_update_sticky(con->window->id, con->sticky);
-            output_push_sticky_windows(focused);
+            // just pick the first device
+            output_push_sticky_windows(con_first_focused());
             ewmh_update_wm_desktop();
         }
 
@@ -743,11 +748,12 @@ static void handle_client_message(xcb_client_message_event_t *event) {
             DLOG("This request came from a pager. Focusing con = %p\n", con);
 
             if (con_is_internal(ws)) {
-                scratchpad_show(con);
+                // just pick the first device
+                scratchpad_show(device_first_focused(), con);
             } else {
                 workspace_show(ws);
                 /* Re-set focus, even if unchanged from i3’s perspective. */
-                focused_id = XCB_NONE;
+                device_unfocus(device_first_focused());
                 con_activate_unblock(con);
             }
         } else {
@@ -850,7 +856,8 @@ static void handle_client_message(xcb_client_message_event_t *event) {
 
                 con->sticky = true;
                 ewmh_update_sticky(con->window->id, true);
-                output_push_sticky_windows(focused);
+                // just pick the first device
+                output_push_sticky_windows(con_first_focused());
             }
         } else {
             Con *ws = ewmh_get_workspace_by_index(index);
@@ -1014,18 +1021,19 @@ static bool handle_clientleader_change(Con *con, xcb_get_property_reply_t *prop)
  * decorations accordingly.
  *
  */
-static void handle_focus_in(xcb_focus_in_event_t *event) {
-    DLOG("focus change in, for window 0x%08x\n", event->event);
+static void handle_focus_in(xcb_input_focus_in_event_t *event) {
+    DLOG("focus change in, for window 0x%08x\n", event->window);
+    Device *device = device_by_id(event->device_id);
 
-    if (event->event == root) {
+    if (event->window == root) {
         DLOG("Received focus in for root window, refocusing the focused window.\n");
-        con_focus(focused);
-        focused_id = XCB_NONE;
+        con_focus(con_by_device(device));
+        device_unfocus(device);
         x_push_changes(croot);
     }
 
     Con *con;
-    if ((con = con_by_window_id(event->event)) == NULL || con->window == NULL)
+    if ((con = con_by_window_id(event->window)) == NULL || con->window == NULL)
         return;
     DLOG("That is con %p / %s\n", con, con->name);
 
@@ -1042,7 +1050,7 @@ static void handle_focus_in(xcb_focus_in_event_t *event) {
 
     /* Floating windows should be refocused to ensure that they are on top of
      * other windows. */
-    if (focused_id == event->event && !con_inside_floating(con)) {
+    if (con_by_device(device)->window->id == event->window && !con_inside_floating(con)) {
         DLOG("focus matches the currently focused window, not doing anything\n");
         return;
     }
@@ -1057,8 +1065,6 @@ static void handle_focus_in(xcb_focus_in_event_t *event) {
 
     con_activate_unblock(con);
 
-    /* We update focused_id because we don’t need to set focus again */
-    focused_id = event->event;
     tree_render();
 }
 
@@ -1066,8 +1072,8 @@ static void handle_focus_in(xcb_focus_in_event_t *event) {
  * Log FocusOut events.
  *
  */
-static void handle_focus_out(xcb_focus_in_event_t *event) {
-    Con *con = con_by_window_id(event->event);
+static void handle_focus_out(xcb_input_focus_in_event_t *event) {
+    Con *con = con_by_window_id(event->window);
     const char *window_name, *mode, *detail;
 
     if (con != NULL) {
@@ -1075,7 +1081,7 @@ static void handle_focus_out(xcb_focus_in_event_t *event) {
         if (window_name == NULL) {
             window_name = "<unnamed con>";
         }
-    } else if (event->event == root) {
+    } else if (event->window == root) {
         window_name = "<the root window>";
     } else {
         window_name = "<unknown window>";
@@ -1129,7 +1135,7 @@ static void handle_focus_out(xcb_focus_in_event_t *event) {
             break;
     }
 
-    DLOG("focus change out: window 0x%08x (con %p, %s) lost focus with detail=%s, mode=%s\n", event->event, con, window_name, detail, mode);
+    DLOG("focus change out: window 0x%08x (con %p, %s) lost focus with detail=%s, mode=%s\n", event->window, con, window_name, detail, mode);
 }
 
 /*
@@ -1449,6 +1455,24 @@ void handle_event(int type, xcb_generic_event_t *event) {
     }
 
     switch (type) {
+        case XCB_GE_GENERIC:
+            switch (((xcb_ge_event_t *)event)->event_type) {
+                case XCB_INPUT_ENTER:
+                    handle_enter((xcb_input_enter_event_t *)event);
+                    break;
+                case XCB_INPUT_FOCUS_IN:
+                    handle_focus_in((xcb_input_focus_in_event_t *)event);
+                    break;
+                case XCB_INPUT_FOCUS_OUT:
+                    handle_focus_out((xcb_input_focus_out_event_t *)event);
+                    break;
+                case XCB_INPUT_MOTION:
+                    handle_motion((xcb_input_motion_notify_event_t *)event);
+                    break;
+                default:
+                    break;
+            }
+            break;
         case XCB_KEY_PRESS:
         case XCB_KEY_RELEASE:
             handle_key_press((xcb_key_press_event_t *)event);
@@ -1479,12 +1503,12 @@ void handle_event(int type, xcb_generic_event_t *event) {
             break;
 
         case XCB_MOTION_NOTIFY:
-            handle_motion_notify((xcb_motion_notify_event_t *)event);
+            //handle_motion_notify((xcb_motion_notify_event_t *)event);
             break;
 
         /* Enter window = user moved their mouse over the window */
         case XCB_ENTER_NOTIFY:
-            handle_enter_notify((xcb_enter_notify_event_t *)event);
+            //handle_enter_notify((xcb_enter_notify_event_t *)event);
             break;
 
         /* Client message are sent to the root window. The only interesting
@@ -1505,11 +1529,11 @@ void handle_event(int type, xcb_generic_event_t *event) {
             break;
 
         case XCB_FOCUS_IN:
-            handle_focus_in((xcb_focus_in_event_t *)event);
+            //handle_focus_in((xcb_focus_in_event_t *)event);
             break;
 
         case XCB_FOCUS_OUT:
-            handle_focus_out((xcb_focus_out_event_t *)event);
+            //handle_focus_out((xcb_focus_out_event_t *)event);
             break;
 
         case XCB_PROPERTY_NOTIFY: {

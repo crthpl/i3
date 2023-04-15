@@ -32,7 +32,7 @@ void scratchpad_move(Con *con) {
     }
     DLOG("should move con %p to __i3_scratch\n", con);
 
-    Con *__i3_scratch = workspace_get("__i3_scratch");
+    Con *__i3_scratch = workspace_get(device_first_focused(), "__i3_scratch");
     if (con_get_workspace(con) == __i3_scratch) {
         DLOG("This window is already on __i3_scratch.\n");
         return;
@@ -82,10 +82,11 @@ void scratchpad_move(Con *con) {
  * can press the same key to quickly look something up).
  *
  */
-bool scratchpad_show(Con *con) {
+bool scratchpad_show(Device *device, Con *con) {
     DLOG("should show scratchpad window %p\n", con);
-    Con *__i3_scratch = workspace_get("__i3_scratch");
+    Con *__i3_scratch = workspace_get(device_first_focused(), "__i3_scratch");
     Con *floating;
+    Con *focused = con_by_device(device);
 
     /* If this was 'scratchpad show' without criteria, we check if the
      * currently focused window is a scratchpad window and should be hidden
@@ -201,7 +202,7 @@ bool scratchpad_show(Con *con) {
     /* Activate active workspace if window is from another workspace to ensure
      * proper focus. */
     if (current != active) {
-        workspace_show(active);
+        workspace_show(device_first_focused(), active);
     }
 
     con_activate(con_descend_focused(con));
@@ -245,7 +246,7 @@ static int _lcm(const int m, const int n) {
  *
  */
 void scratchpad_fix_resolution(void) {
-    Con *__i3_scratch = workspace_get("__i3_scratch");
+    Con *__i3_scratch = workspace_get(device_first_focused(), "__i3_scratch");
     Con *__i3_output = con_get_output(__i3_scratch);
     DLOG("Current resolution: (%d, %d) %d x %d\n",
          __i3_output->rect.x, __i3_output->rect.y,

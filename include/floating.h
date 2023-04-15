@@ -56,7 +56,7 @@ void floating_raise_con(Con *con);
  * the actual workspace if not.
  *
  */
-bool floating_maybe_reassign_ws(Con *con);
+bool floating_maybe_reassign_ws(Device *device, Con *con);
 
 /**
  * Centers a floating con above the specified rect.
@@ -68,14 +68,14 @@ void floating_center(Con *con, Rect rect);
  * Moves the given floating con to the current pointer position.
  *
  */
-void floating_move_to_pointer(Con *con);
+void floating_move_to_pointer(Device *device, Con *con);
 
 /**
  * Called when the user clicked on the titlebar of a floating window.
  * Calls the drag_pointer function with the drag_window callback
  *
  */
-void floating_drag_window(Con *con, const xcb_button_press_event_t *event, bool use_threshold);
+void floating_drag_window(Con *con, const xcb_input_button_press_event_t *event, bool use_threshold);
 
 /**
  * Called when the user clicked on a floating window while holding the
@@ -83,7 +83,7 @@ void floating_drag_window(Con *con, const xcb_button_press_event_t *event, bool 
  * Calls the drag_pointer function with the resize_window callback
  *
  */
-void floating_resize_window(Con *con, const bool proportional, const xcb_button_press_event_t *event);
+void floating_resize_window(Con *con, const bool proportional, const xcb_input_button_press_event_t *event);
 
 /**
  * Called when a floating window is created or resized.  This function resizes
@@ -105,7 +105,7 @@ void floating_check_size(Con *floating_con, bool prefer_height);
  * outputs.
  *
  */
-bool floating_reposition(Con *con, Rect newrect);
+bool floating_reposition(Device *device, Con *con, Rect newrect);
 
 /**
  * Sets size of the CT_FLOATING_CON to specified dimensions. Might limit the

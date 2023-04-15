@@ -22,7 +22,7 @@ Con *output_get_content(Con *output);
  * output name.
  *
  */
-Output *get_output_from_string(Output *current_output, const char *output_str);
+Output *get_output_from_string(Device *device, Output *current_output, const char *output_str);
 
 /**
  * Retrieves the primary name of an output.

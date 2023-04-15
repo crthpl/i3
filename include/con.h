@@ -37,20 +37,20 @@ void con_free(Con *con);
  * run of x_push_changes().
  *
  */
-void con_focus(Con *con);
+void con_focus(Device *device, Con *con);
 
 /**
  * Sets input focus to the given container and raises it to the top.
  *
  */
-void con_activate(Con *con);
+void con_activate(Device *device, Con *con);
 
 /**
  * Activates the container like in con_activate but removes fullscreen
  * restrictions and properly warps the pointer if needed.
  *
  */
-void con_activate_unblock(Con *con);
+void con_activate_unblock(Device *device, Con *con);
 
 /**
  * Closes the given container.

@@ -230,7 +230,7 @@ void floating_check_size(Con *floating_con, bool prefer_height) {
 }
 
 bool floating_enable(Con *con, bool automatic) {
-    bool set_focus = (con == focused);
+    bool set_focus = con_is_focused(con);
 
     if (con_is_docked(con)) {
         LOG("Container is a dock window, not enabling floating mode.\n");
@@ -485,7 +485,7 @@ void floating_raise_con(Con *con) {
  * the actual workspace if not.
  *
  */
-bool floating_maybe_reassign_ws(Con *con) {
+bool floating_maybe_reassign_ws(Device *device, Con *con) {
     if (con_is_internal(con_get_workspace(con))) {
         DLOG("Con in an internal workspace\n");
         return false;
@@ -514,7 +514,7 @@ bool floating_maybe_reassign_ws(Con *con) {
     }
     con_move_to_workspace(con, ws, false, true, false);
     if (needs_focus) {
-        workspace_show(ws);
+        workspace_show(device, ws);
         con_activate(needs_focus);
     }
     return true;
@@ -533,7 +533,7 @@ void floating_center(Con *con, Rect rect) {
  * Moves the given floating con to the current pointer position.
  *
  */
-void floating_move_to_pointer(Con *con) {
+void floating_move_to_pointer(Device *device, Con *con) {
     assert(con->type == CT_FLOATING_CON);
 
     xcb_query_pointer_reply_t *reply = xcb_query_pointer_reply(conn, xcb_query_pointer(conn, root), NULL);
@@ -562,7 +562,7 @@ void floating_move_to_pointer(Con *con) {
         y = output->rect.y + output->rect.height - con->rect.height;
 
     /* Update container's coordinates to position it correctly. */
-    floating_reposition(con, (Rect){x, y, con->rect.width, con->rect.height});
+    floating_reposition(device, con, (Rect){x, y, con->rect.width, con->rect.height});
 }
 
 DRAGGING_CB(drag_window_callback) {
@@ -575,7 +575,7 @@ DRAGGING_CB(drag_window_callback) {
     xcb_flush(conn);
 
     /* Check if we cross workspace boundaries while moving */
-    if (!floating_maybe_reassign_ws(con))
+    if (!floating_maybe_reassign_ws(device_by_id(event->deviceid), con))
         return;
     /* Ensure not to warp the pointer while dragging */
     x_set_warp_to(NULL);
@@ -587,7 +587,7 @@ DRAGGING_CB(drag_window_callback) {
  * Calls the drag_pointer function with the drag_window callback
  *
  */
-void floating_drag_window(Con *con, const xcb_button_press_event_t *event, bool use_threshold) {
+void floating_drag_window(Con *con, const xcb_input_button_press_event_t *event, bool use_threshold) {
     DLOG("floating_drag_window\n");
 
     /* Push changes before dragging, so that the window gets raised now and not
@@ -607,7 +607,7 @@ void floating_drag_window(Con *con, const xcb_button_press_event_t *event, bool 
 
     /* If the user cancelled, undo the changes. */
     if (drag_result == DRAG_REVERT) {
-        floating_reposition(con, initial_rect);
+        floating_reposition(device_by_id(event->deviceid), con, initial_rect);
         return;
     }
 
@@ -686,7 +686,7 @@ DRAGGING_CB(resize_window_callback) {
  *
  */
 void floating_resize_window(Con *con, const bool proportional,
-                            const xcb_button_press_event_t *event) {
+                            const xcb_input_button_press_event_t *event) {
     DLOG("floating_resize_window\n");
 
     /* Push changes before resizing, so that the window gets raised now and not
@@ -725,7 +725,7 @@ void floating_resize_window(Con *con, const bool proportional,
 
     /* If the user cancels, undo the resize */
     if (drag_result == DRAG_REVERT)
-        floating_reposition(con, initial_rect);
+        floating_reposition(device_by_id(event->deviceid), con, initial_rect);
 
     /* If this is a scratchpad window, don't auto center it from now on. */
     if (con->scratchpad_state == SCRATCHPAD_FRESH)
@@ -739,7 +739,7 @@ void floating_resize_window(Con *con, const bool proportional,
  * outputs.
  *
  */
-bool floating_reposition(Con *con, Rect newrect) {
+bool floating_reposition(Device *device, Con *con, Rect newrect) {
     /* Sanity check: Are the new coordinates on any output? If not, we
      * ignore that request. */
     if (!output_containing_rect(newrect)) {
@@ -749,7 +749,7 @@ bool floating_reposition(Con *con, Rect newrect) {
 
     con->rect = newrect;
 
-    floating_maybe_reassign_ws(con);
+    floating_maybe_reassign_ws(device, con);
 
     /* If this is a scratchpad window, don't auto center it from now on. */
     if (con->scratchpad_state == SCRATCHPAD_FRESH)

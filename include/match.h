@@ -40,7 +40,7 @@ void match_copy(Match *dest, Match *src);
  * Check if a match data structure matches the given window.
  *
  */
-bool match_matches_window(Match *match, i3Window *window);
+bool match_matches_window(Device *device, Match *match, i3Window *window);
 
 /**
  * Frees the given match. It must not be used afterwards!
@@ -52,4 +52,4 @@ void match_free(Match *match);
  * Interprets a ctype=cvalue pair and adds it to the given match specification.
  *
  */
-void match_parse_property(Match *match, const char *ctype, const char *cvalue);
+void match_parse_property(Device *device, Match *match, const char *ctype, const char *cvalue);

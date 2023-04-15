@@ -19,4 +19,4 @@
  * Then, route_click is called on the appropriate con.
  *
  */
-void handle_button_press(xcb_button_press_event_t *event);
+void handle_button_press(xcb_input_button_press_event_t *event);

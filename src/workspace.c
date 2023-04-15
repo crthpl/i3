@@ -128,7 +128,7 @@ bool output_triggers_assignment(Output *output, struct Workspace_Assignment *ass
  * memory and initializing the data structures correctly).
  *
  */
-Con *workspace_get(const char *num) {
+Con *workspace_get(Device *device, const char *num) {
     Con *workspace = get_existing_workspace_by_name(num);
     if (workspace) {
         return workspace;
@@ -143,7 +143,7 @@ Con *workspace_get(const char *num) {
     Con *output = get_assigned_output(num, parsed_num);
     /* if an assignment is not found, we create this workspace on the current output */
     if (!output) {
-        output = con_get_output(focused);
+        output = con_get_output(con_by_device(device));
     }
 
     /* No parent because we need to attach this container after setting its
@@ -425,7 +425,7 @@ static void workspace_defer_update_urgent_hint_cb(EV_P_ ev_timer *w, int revents
  * Switches to the given workspace
  *
  */
-void workspace_show(Con *workspace) {
+void workspace_show(Device *device, Con *workspace) {
     Con *current, *old = NULL;
 
     /* safe-guard against showing i3-internal workspaces like __i3_scratch */
@@ -443,7 +443,7 @@ void workspace_show(Con *workspace) {
     /* enable fullscreen for the target workspace. If it happens to be the
      * same one we are currently on anyways, we can stop here. */
     workspace->fullscreen_mode = CF_OUTPUT;
-    current = con_get_workspace(focused);
+    current = con_get_workspace(con_by_device(device));
     if (workspace == current) {
         DLOG("Not switching, already there.\n");
         return;
@@ -474,7 +474,7 @@ void workspace_show(Con *workspace) {
     Con *next = con_descend_focused(workspace);
 
     /* Memorize current output */
-    Con *old_output = con_get_output(focused);
+    Con *old_output = con_get_output(con_by_device(device));
 
     /* Display urgency hint for a while if the newly visible workspace would
      * focus and thereby immediately destroy it */
@@ -486,6 +486,7 @@ void workspace_show(Con *workspace) {
         /* … but immediately reset urgency flags; they will be set to false by
          * the timer callback in case the container is focused at the time of
          * its expiration */
+        Con *focused = con_by_device(device);
         focused->urgent = true;
         workspace->urgent = true;
 
@@ -538,6 +539,7 @@ void workspace_show(Con *workspace) {
     }
 
     workspace->fullscreen_mode = CF_OUTPUT;
+    Con *focused = con_by_device(device);
     LOG("focused now = %p / %s\n", focused, focused->name);
 
     /* Set mouse pointer */
@@ -565,8 +567,8 @@ void workspace_show_by_name(const char *num) {
  * Focuses the next workspace.
  *
  */
-Con *workspace_next(void) {
-    Con *current = con_get_workspace(focused);
+Con *workspace_next(Device *device) {
+    Con *current = con_get_workspace(con_by_device(device));
     Con *next = NULL, *first = NULL, *first_opposite = NULL;
     Con *output;
 
@@ -628,8 +630,8 @@ Con *workspace_next(void) {
  * Focuses the previous workspace.
  *
  */
-Con *workspace_prev(void) {
-    Con *current = con_get_workspace(focused);
+Con *workspace_prev(Device *device) {
+    Con *current = con_get_workspace(con_by_device(device));
     Con *prev = NULL, *first_opposite = NULL, *last = NULL;
     Con *output;
 
@@ -694,7 +696,8 @@ Con *workspace_prev(void) {
  * Focuses the next workspace on the same output.
  *
  */
-Con *workspace_next_on_output(void) {
+Con *workspace_next_on_output(Device *device) {
+    Con *focused = con_by_device(device);
     Con *current = con_get_workspace(focused);
     Con *next = NULL;
     Con *output = con_get_output(focused);
@@ -749,7 +752,8 @@ workspace_next_on_output_end:
  * Focuses the previous workspace on same output.
  *
  */
-Con *workspace_prev_on_output(void) {
+Con *workspace_prev_on_output(Device *device) {
+    Con *focused = con_by_device(device);
     Con *current = con_get_workspace(focused);
     Con *prev = NULL;
     Con *output = con_get_output(focused);

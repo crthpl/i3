@@ -77,4 +77,5 @@
 #include "display_version.h"
 #include "restore_layout.h"
 #include "sync.h"
+#include "device.h"
 #include "main.h"
